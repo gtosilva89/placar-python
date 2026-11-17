@@ -128,7 +128,7 @@ textarea.cod{font-family:ui-monospace,Consolas,'Courier New',monospace;font-size
 label.teste{display:flex;gap:8px;align-items:center;font-size:21px}
 label.teste input{width:20px;height:20px}
 .fala{white-space:pre-wrap}
-.cena.largo{width:min(1280px,100%)}.codsalvo{font-family:monospace;font-size:34px;letter-spacing:3px;text-align:center;padding:14px;background:#fff8dc;color:#1a1533;border:4px dashed var(--ouro);word-break:break-all;user-select:all}.fala.alerta{border-color:#c53030;color:#ffd7d7}.ph{font-size:11px;color:var(--ouro);margin:14px 0 6px}.tag{display:inline-block;padding:1px 8px;color:#fff;font-size:18px}.calor td,.calor th{text-align:center;font-size:15px}.calor th{writing-mode:vertical-rl;transform:rotate(180deg);font-size:13px}.calor td:first-child{text-align:left}button.mini{font-size:15px;padding:2px 8px}.cena ol,.cena p{font-size:19px}
+.cena.largo{width:min(1280px,100%)}.cena>*{flex-shrink:0}.cena textarea.cod{min-height:110px}.codsalvo{font-family:monospace;font-size:34px;letter-spacing:3px;text-align:center;padding:14px;background:#fff8dc;color:#1a1533;border:4px dashed var(--ouro);word-break:break-all;user-select:all}.fala.alerta{border-color:#c53030;color:#ffd7d7}.ph{font-size:11px;color:var(--ouro);margin:14px 0 6px}.tag{display:inline-block;padding:1px 8px;color:#fff;font-size:18px}.calor td,.calor th{text-align:center;font-size:15px}.calor th{writing-mode:vertical-rl;transform:rotate(180deg);font-size:13px}.calor td:first-child{text-align:left}button.mini{font-size:15px;padding:2px 8px}.cena ol,.cena p{font-size:19px}
 </style>
 </head><body>
 <div class="wrap">
@@ -679,7 +679,7 @@ function painelProf(){const AL=alunosProf();const saida=el('div',{});
   <h3 class="ph">BATALHAS QUE MAIS DERRUBARAM A TURMA</h3>${top.length?'<ol>'+top.map(([b,n])=>`<li>${escH(b.nome)} (${escH(b.conceito)}): ${n} erro(s) somados</li>`).join('')+'</ol>':'<p class="dica">Nenhum erro registrado.</p>'}
   <h3 class="ph">MAPA DE CALOR (erros por batalha)</h3><div class="dica">Verde = 0 ou 1 erro; laranja = 2 ou 3; vermelho = 4 ou mais; · = não concluída; escuro = fase não começada. Quem voltou por código aparece com 0, 2 ou 4+ (o código guarda a faixa).</div>
   <div class="tbw"><table class="tb calor"><tr><th>Aluno</th>${BAT.map(b=>`<th title="${escH(b.conceito)}">${escH(b.nome)}</th>`).join('')}</tr>${calor}</table></div>
-  <div class="dica" style="margin-top:8px">A sugestão A/PA/NA vem do jogo. A menção é sua: confirme com a observação em sala e com o que o aluno escreveu (botão abrir). Os textos escritos só aparecem para quem salvou neste computador.</div>`;
+  <div class="dica" style="margin-top:8px">A sugestão A/PA/NA vem do jogo. A menção é sua: confirme com a observação em sala e com o que o aluno escreveu (botão abrir). Os textos escritos aparecem para quem clicou em Salvar (planilha ou este computador); quem foi adicionado só pelo código não traz os textos.</div>`;
   saida.querySelectorAll('button[data-i]').forEach(b=>b.onclick=()=>abrirRelProf(AL[+b.dataset.i]));
   saida.querySelectorAll('button[data-x]').forEach(b=>b.onclick=()=>{const S=AL[+b.dataset.x];if(b.dataset.ok){regGravar(regLer().filter(x=>normNome(x.nome)!==normNome(S.nome)));painelProf()}else{b.dataset.ok='1';b.textContent='confirmar?'}})}
  else saida.append(el('div',{class:'fala'},'Ninguém salvou neste computador ainda. Cole abaixo os nomes e códigos que os alunos anotaram.'));
