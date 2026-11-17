@@ -660,6 +660,13 @@ function painelProf(){const AL=alunosProf();const saida=el('div',{});
  else saida.append(el('div',{class:'fala'},'Ninguém salvou neste computador ainda. Cole abaixo os nomes e códigos que os alunos anotaram.'));
  cena(el('h2',{},'Área do Professor • progresso da turma'),
   el('div',{class:'dica'},'Aparecem aqui os alunos que salvaram neste computador. Para ver quem jogou em outro PC, cole o nome e o código que ele anotou (um por linha). Para juntar PCs: Exportar registro em cada um e Juntar registro no seu.'),
+  el('h3',{class:'ph'},'CÓDIGOS DO MESTRE (não mostrar aos alunos)'),
+  el('div',{class:'tbw'},el('table',{class:'tb'},el('tr',{},el('th',{},'Código'),el('th',{},'Onde'),el('th',{},'Quando falar')),
+   ...[['APITO','Fase 1 • Portão do Mestre (fim da Região 3, Mercado dos Operadores)','Depois da Aula dos Especialistas do Encontro 2'],
+       ['VAR','Fase 1 • Castelo do VAR Bugado (chefão da Fase 1)','Quando a turma resolver o chefão no quadro'],
+       ['LACO','Tela Níveis • libera a Fase 2','Início do Encontro 3, para quem não terminou a Fase 1'],
+       ['GOL','Fase 2 • Portão do Mestre (fim da Região 3, Montanha dos Bugs)','Depois da Aula dos Especialistas do Encontro 3'],
+       ['CAMPEAO','Fase 2 • Torre do Troféu (chefão final)','Quando a turma resolver o chefão no quadro']].map(([c,o,q])=>el('tr',{},el('td',{},el('b',{},c)),el('td',{},o),el('td',{},q))))),
   barra,saida,el('h3',{class:'ph'},'ADICIONAR ALUNOS PELO CÓDIGO'),ta,el('div',{class:'fb',id:'fbProf',hidden:''}),
   el('div',{class:'acoes'},el('button',{class:'sec',type:'button',on:{click:()=>{profAberto=false;fechar();inicio()}}},'Sair da área (trancar)'),el('button',{type:'button',on:{click:add}},'Adicionar')));
  $('cena').classList.add('largo')}
