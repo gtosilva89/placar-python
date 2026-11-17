@@ -282,6 +282,26 @@ const REG_KEY='reinoDaLogica_registro';
 function regLer(){try{return JSON.parse(localStorage.getItem(REG_KEY)||'[]')}catch(e){return[]}}
 function regGravar(r){try{localStorage.setItem(REG_KEY,JSON.stringify(r))}catch(e){}}
 function regSalvar(S,cod,origem){const r=regLer().filter(x=>normNome(x.nome)!==normNome(S.nome));r.push({nome:S.nome,codigo:cod,data:new Date().toLocaleString('pt-BR'),origem:origem||'jogo',ts:Date.now(),S:JSON.parse(JSON.stringify(S))});regGravar(r)}
+// ===================== ENVIO PARA A PLANILHA DO PROFESSOR =====================
+// Cada "Salvar" manda o registro completo do aluno (progresso, erros e textos escritos) para uma
+// planilha Google do professor (Apps Script em jogo/planilha/Codigo.gs). A Área do Professor baixa de lá.
+// Sem internet, o envio fica pendente e é refeito sozinho depois.
+const NUVEM_URL='https://script.google.com/macros/s/AKfycbx0uoR-hVVF4ZdgdDCVIPbYjJJsny9nLzcW-bAbUtvWk7m5FLBt0UqF22kJoY0xwmM-/exec';
+const ENV_KEY='reinoDaLogica_enviados';
+function envLer(){try{return JSON.parse(localStorage.getItem(ENV_KEY)||'{}')}catch(e){return{}}}
+function envGravar(o){try{localStorage.setItem(ENV_KEY,JSON.stringify(o))}catch(e){}}
+async function nuvemEnviar(x){if(!NUVEM_URL)return false;
+ try{await fetch(NUVEM_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({nome:x.nome,codigo:x.codigo,data:x.data,ts:x.ts||0,origem:x.origem,xp:(x.S||{}).xp,S:x.S})});
+  const e=envLer();e[normNome(x.nome)]=x.ts||0;envGravar(e);return true}catch(err){return false}}
+let nuvemOcupada=false;
+async function nuvemPendentes(){if(!NUVEM_URL||nuvemOcupada)return;nuvemOcupada=true;
+ try{const e=envLer();for(const x of regLer())if(x.origem==='jogo'&&e[normNome(x.nome)]!==(x.ts||0))await nuvemEnviar(x)}finally{nuvemOcupada=false}}
+async function nuvemBaixar(chave){if(!NUVEM_URL)return{erro:'Planilha não configurada.'};
+ try{const r=await fetch(NUVEM_URL+'?chave='+encodeURIComponent(chave)+'&t='+Date.now());const d=await r.json();if(!d.ok)return{erro:d.erro==='senha'?'A planilha recusou a senha.':'Erro na planilha.'};
+  const reg=regLer();let n=0;for(const x of d.lista||[]){if(!x||!x.nome||!x.S)continue;const i=reg.findIndex(y=>normNome(y.nome)===normNome(x.nome));const novo={nome:x.nome,codigo:x.codigo,data:x.data,origem:'nuvem',ts:x.ts||0,S:x.S};
+   if(i<0){reg.push(novo);n++}else if((x.ts||0)>(reg[i].ts||0)){reg[i]=novo;n++}}
+  regGravar(reg);return{n,total:(d.lista||[]).length}}catch(err){return{erro:'Sem conexão com a planilha.'}}}
+if(NUVEM_URL){setTimeout(nuvemPendentes,1500);setInterval(nuvemPendentes,60000)}
 // ===================== MOTOR =====================
 const KEY='reinoDaLogica_v1';
 const OFF=[[0,0],[320,0],[320,184],[0,184]];
@@ -523,8 +543,9 @@ function vitoria(id,errosB){sfx('vitoria');PR().feito[id]=true;S.vida=Math.min(5
  cena(el('h2',{},'Vitória!'),el('div',{class:'fala'},`${NOD[id].inimigo[0]} foi derrotado. Você recuperou 1 vida.`),el('div',{class:'dica'},'E agora? Seguir continua a aventura. Salvar mostra o código para você anotar. Sair fecha o jogo.'),botoesSSS())}
 function botoesSSS(seguir){return el('div',{class:'acoes'},el('button',{class:'sec',type:'button',on:{click:sair}},'Sair'),el('button',{class:'sec',type:'button',on:{click:()=>salvarCodigo(seguir)}},'Salvar 💾'),el('button',{type:'button',on:{click:seguir||fechar}},'Seguir ▶'))}
 function salvarCodigo(depois){if(!S)return;const cod=gerarCodigo(S);ultimoCod=cod;sujo=false;regSalvar(S,cod,'jogo');sfx('selo');
+ const env=el('div',{class:'dica',id:'envStatus'},NUVEM_URL?'Enviando para o professor…':'');if(NUVEM_URL){const x=regLer().find(y=>normNome(y.nome)===normNome(S.nome));nuvemEnviar(x).then(ok=>{env.textContent=ok?'✔ Progresso enviado para o professor.':'Sem internet agora: o envio para o professor será feito depois, sozinho.'})}
  cena(el('h2',{},'Código de salvamento'),el('div',{class:'fala'},'Anote no caderno, exatamente assim:'),el('div',{class:'codsalvo',id:'codSalvo'},cod),
-  el('div',{class:'dica'},`Para continuar outro dia (em qualquer computador): abra o jogo, digite o nome "${S.nome}" do mesmo jeito e este código. Cada vez que você salva, sai um código novo: use sempre o último.`),
+  el('div',{class:'dica'},`Para continuar outro dia (em qualquer computador): abra o jogo, digite o nome "${S.nome}" do mesmo jeito e este código. Cada vez que você salva, sai um código novo: use sempre o último.`),env,
   el('div',{class:'acoes'},el('button',{class:'sec',type:'button',on:{click:()=>{S=null;LV=null;fechar();inicio()}}},'Sair do jogo'),el('button',{type:'button',on:{click:depois||fechar}},'Já anotei, seguir ▶')))}
 function sair(){if(!S)return inicio();if(!sujo){S=null;LV=null;fechar();return inicio()}sfx('erro');
  cena(el('h2',{},'⚠ Atenção!'),el('div',{class:'fala alerta'},'Você ainda não salvou o que fez desde o último código. Se sair agora, esse progresso será PERDIDO.'),
@@ -610,10 +631,10 @@ requestAnimationFrame(desenha);inicio();
 // Proteção simples, para a sala de aula: a senha não aparece no arquivo, só um "resumo" dela.
 const SENHA_H=2569425916;
 function senhaOk(t){let h=2166136261>>>0;const s='rl|'+normNome(t);for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)>>>0}return h===SENHA_H}
-let profAberto=false;
+let profAberto=false,senhaProf='',profNuvemFeito=false;
 function areaProfessor(){if(profAberto)return painelProf();
  const inp=el('input',{id:'senhaProf',type:'password',autocomplete:'off','aria-label':'Senha do professor',placeholder:'Senha'});const fb=el('div',{class:'fb no',hidden:''});
- const ok=()=>{if(senhaOk(inp.value)){profAberto=true;sfx('porta');painelProf()}else{sfx('erro');fb.hidden=false;fb.textContent='Senha errada.';inp.value='';inp.classList.add('tremer');setTimeout(()=>inp.classList.remove('tremer'),400)}};
+ const ok=()=>{if(senhaOk(inp.value)){profAberto=true;senhaProf=inp.value;profNuvemFeito=false;sfx('porta');painelProf()}else{sfx('erro');fb.hidden=false;fb.textContent='Senha errada.';inp.value='';inp.classList.add('tremer');setTimeout(()=>inp.classList.remove('tremer'),400)}};
  inp.addEventListener('keydown',e=>{if(e.key==='Enter')ok()});
  cena(el('h2',{},'Área do Professor 🔒'),el('div',{class:'fala'},'Digite a senha do professor:'),inp,fb,el('div',{class:'acoes'},el('button',{class:'sec',type:'button',on:{click:()=>{fechar();inicio()}}},'Voltar'),el('button',{type:'button',on:{click:ok}},'Entrar')))}
 const BAT=LEVELS.flatMap(lv=>lv.fases.flatMap(f=>Object.entries(f.lugares).filter(([id,l])=>l.tipo==='batalha').map(([id,l])=>({lv:lv.id,id,nome:l.nome,conceito:CARDS[l.card].t}))));
@@ -635,17 +656,21 @@ function relTurmaProf(AL){const partes=AL.map(S=>relatorioHTML(S).replace(/^[\s\
  const h=relatorioHTML(AL[0]);const head=h.slice(0,h.indexOf('<body>'));baixarArq('reino-da-logica_relatorios_turma.html',head.replace(/<title>.*<\/title>/,'<title>Relatórios da turma</title>')+'<body>'+partes+'</body></html>','text/html')}
 function abrirRelProf(S){const w=window.open('','_blank');if(!w){baixarArq('relatorio_'+S.nome.replace(/\s+/g,'-')+'.html',relatorioHTML(S),'text/html');toast('Pop-up bloqueado: o relatório foi baixado.');return}w.document.write(relatorioHTML(S));w.document.close()}
 function painelProf(){const AL=alunosProf();const saida=el('div',{});
+ const nst=el('div',{class:'dica',id:'nuvemStatus'},NUVEM_URL?(profNuvemFeito?'Planilha conferida. Clique em Atualizar da planilha para buscar salvamentos novos.':'Buscando os salvamentos na planilha…'):'Planilha do professor não configurada: aparecem só os salvamentos deste computador.');
+ const atualizar=()=>{nst.textContent='Buscando os salvamentos na planilha…';nuvemBaixar(senhaProf).then(r=>{profNuvemFeito=true;if(r.erro){nst.textContent=r.erro;return}painelProf();setTimeout(()=>{const z=$('nuvemStatus');if(z)z.textContent=`Planilha: ${r.total} aluno(s) lá, ${r.n} atualizado(s) agora (${new Date().toLocaleTimeString('pt-BR')}).`},30)})};
+ if(NUVEM_URL&&!profNuvemFeito)setTimeout(atualizar,50);
  const ta=el('textarea',{class:'cod',rows:'4',placeholder:'Um aluno por linha:  Nome ; CÓDIGO\nAna Souza ; 7KQ2-M9XA-...','aria-label':'Alunos e códigos'});const fbA=el('div',{class:'fb',hidden:''});
  const add=()=>{const r=adicionarCodigos(ta.value);painelProf();setTimeout(()=>toast(`${r.ok} aluno(s) adicionado(s)`+(r.ruins.length?' • com problema: '+r.ruins.length:'')),60);if(r.ruins.length)setTimeout(()=>{const f=$('fbProf');if(f){f.hidden=false;f.className='fb no';f.textContent='Não deu certo: '+r.ruins.join(' | ')}},80)};
  const imp=()=>{const inp=document.createElement('input');inp.type='file';inp.accept='.json,application/json';inp.onchange=()=>{const f=inp.files[0];if(!f)return;f.text().then(t=>{try{const d=JSON.parse(t);if(!Array.isArray(d))throw 0;const r=regLer();let n=0;for(const x of d){if(!x||!x.nome||!x.S)continue;const i=r.findIndex(y=>normNome(y.nome)===normNome(x.nome));if(i<0){r.push(x);n++}else if(!r[i].ts||(x.ts||0)>=r[i].ts){r[i]=x;n++}}regGravar(r);painelProf();toast(n+' registro(s) juntados')}catch(e){toast('Arquivo inválido.')}})};inp.click()};
  const barra=el('div',{class:'acoes',style:'justify-content:flex-start;flex-wrap:wrap'},
+  NUVEM_URL?el('button',{type:'button',on:{click:atualizar}},'Atualizar da planilha ⟳'):null,
   el('button',{class:'sec',type:'button',disabled:AL.length?null:'',on:{click:()=>csvProf(AL)}},'Baixar planilha (CSV)'),
   el('button',{class:'sec',type:'button',disabled:AL.length?null:'',on:{click:()=>relTurmaProf(AL)}},'Relatório da turma'),
   el('button',{class:'sec',type:'button',disabled:AL.length?null:'',on:{click:()=>baixarArq('reino-da-logica_registro.json',JSON.stringify(regLer()),'application/json')}},'Exportar registro'),
   el('button',{class:'sec',type:'button',on:{click:imp}},'Juntar registro de outro PC'));
  if(AL.length){
   const linhas=AL.map((S,i)=>{const a=analisar(S);const f1=a.fases[0],f2=a.fases[1];
-   return `<tr><td>${escH(S.nome)}</td><td>${escH(S._data||'')}<br><span class="dica">${S._origem==='professor'?'adicionado por você':'salvo neste PC'}</span></td><td><code>${escH(S._cod||'')}</code></td><td class="num">${S.xp}</td><td>${f1.feitos}/${f1.total}</td><td>${f2.jogou?f2.feitos+'/'+f2.total:'—'}</td>${[1,2,3].map(k=>`<td><span class="tag" style="background:${corSug[a.sug[k]]}">${a.sug[k]}</span></td>`).join('')}<td>${a.atencao.map(x=>escH(x.conceito)).join(', ')||'—'}</td><td><button class="mini" type="button" data-i="${i}">abrir</button> <button class="mini sec" type="button" data-x="${i}">remover</button></td></tr>`}).join('');
+   return `<tr><td>${escH(S.nome)}</td><td>${escH(S._data||'')}<br><span class="dica">${S._origem==='professor'?'adicionado por você':S._origem==='nuvem'?'veio da planilha':'salvo neste PC'}</span></td><td><code>${escH(S._cod||'')}</code></td><td class="num">${S.xp}</td><td>${f1.feitos}/${f1.total}</td><td>${f2.jogou?f2.feitos+'/'+f2.total:'—'}</td>${[1,2,3].map(k=>`<td><span class="tag" style="background:${corSug[a.sug[k]]}">${a.sug[k]}</span></td>`).join('')}<td>${a.atencao.map(x=>escH(x.conceito)).join(', ')||'—'}</td><td><button class="mini" type="button" data-i="${i}">abrir</button> <button class="mini sec" type="button" data-x="${i}">remover</button></td></tr>`}).join('');
   const cel=(t,c)=>`<td${c?` style="background:${c}"`:''}>${t}</td>`;
   const calor=AL.map(S=>`<tr><td>${escH(S.nome)}</td>${BAT.map(b=>{const p=(S.P||{})[b.lv];if(!p)return cel('','#1a1533');const e=(p.erros||{})[b.id]||0,f=p.feito&&p.feito[b.id];return cel(f?(e>=4?'4+':e):'·',!f?'#3d3550':e===0?'#2d6a4f':e<=1?'#55a630':e<=3?'#e09f3e':'#9e2a2b')}).join('')}</tr>`).join('');
   const soma=BAT.map(b=>AL.reduce((t,S)=>t+((((S.P||{})[b.lv]||{}).erros||{})[b.id]||0),0));
@@ -659,7 +684,7 @@ function painelProf(){const AL=alunosProf();const saida=el('div',{});
   saida.querySelectorAll('button[data-x]').forEach(b=>b.onclick=()=>{const S=AL[+b.dataset.x];if(b.dataset.ok){regGravar(regLer().filter(x=>normNome(x.nome)!==normNome(S.nome)));painelProf()}else{b.dataset.ok='1';b.textContent='confirmar?'}})}
  else saida.append(el('div',{class:'fala'},'Ninguém salvou neste computador ainda. Cole abaixo os nomes e códigos que os alunos anotaram.'));
  cena(el('h2',{},'Área do Professor • progresso da turma'),
-  el('div',{class:'dica'},'Aparecem aqui os alunos que salvaram neste computador. Para ver quem jogou em outro PC, cole o nome e o código que ele anotou (um por linha). Para juntar PCs: Exportar registro em cada um e Juntar registro no seu.'),
+  el('div',{class:'dica'},'Aparecem aqui os alunos que salvaram neste computador e, com a planilha ligada, todos os que clicaram em Salvar em qualquer computador. Para ver quem jogou em outro PC, cole o nome e o código que ele anotou (um por linha). Para juntar PCs: Exportar registro em cada um e Juntar registro no seu.'),
   el('h3',{class:'ph'},'CÓDIGOS DO MESTRE (não mostrar aos alunos)'),
   el('div',{class:'tbw'},el('table',{class:'tb'},el('tr',{},el('th',{},'Código'),el('th',{},'Onde'),el('th',{},'Quando falar')),
    ...[['APITO','Fase 1 • Portão do Mestre (fim da Região 3, Mercado dos Operadores)','Depois da Aula dos Especialistas do Encontro 2'],
@@ -667,7 +692,7 @@ function painelProf(){const AL=alunosProf();const saida=el('div',{});
        ['LACO','Tela Níveis • libera a Fase 2','Início do Encontro 3, para quem não terminou a Fase 1'],
        ['GOL','Fase 2 • Portão do Mestre (fim da Região 3, Montanha dos Bugs)','Depois da Aula dos Especialistas do Encontro 3'],
        ['CAMPEAO','Fase 2 • Torre do Troféu (chefão final)','Quando a turma resolver o chefão no quadro']].map(([c,o,q])=>el('tr',{},el('td',{},el('b',{},c)),el('td',{},o),el('td',{},q))))),
-  barra,saida,el('h3',{class:'ph'},'ADICIONAR ALUNOS PELO CÓDIGO'),ta,el('div',{class:'fb',id:'fbProf',hidden:''}),
+  nst,barra,saida,el('h3',{class:'ph'},'ADICIONAR ALUNOS PELO CÓDIGO'),ta,el('div',{class:'fb',id:'fbProf',hidden:''}),
   el('div',{class:'acoes'},el('button',{class:'sec',type:'button',on:{click:()=>{profAberto=false;fechar();inicio()}}},'Sair da área (trancar)'),el('button',{type:'button',on:{click:add}},'Adicionar')));
  $('cena').classList.add('largo')}
 </script></body></html>
